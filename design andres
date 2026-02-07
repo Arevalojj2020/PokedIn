@@ -1,0 +1,962 @@
+import { useState, useEffect, useRef, useCallback } from "react";
+
+// ============================================================
+// CONFIG & DATA
+// ============================================================
+const TYPES = {
+  Fire: { emoji: "🔥", color: "#FF6B35", light: "#FFF0E8", label: "Systems", icon: "⬡" },
+  Water: { emoji: "💧", color: "#3B82F6", light: "#EBF2FF", label: "Data/AI", icon: "◆" },
+  Electric: { emoji: "⚡", color: "#EAB308", light: "#FEFCE8", label: "Frontend", icon: "△" },
+  Grass: { emoji: "🌿", color: "#22C55E", light: "#ECFDF5", label: "DevOps", icon: "⬢" },
+  Ghost: { emoji: "👻", color: "#8B5CF6", light: "#F3EEFF", label: "Security", icon: "◇" },
+  Psychic: { emoji: "🧠", color: "#EC4899", light: "#FDF2F8", label: "Functional", icon: "○" },
+  Rock: { emoji: "🪨", color: "#A16207", light: "#FEF9E7", label: "Enterprise", icon: "□" },
+  Dragon: { emoji: "🐉", color: "#7C3AED", light: "#F0E7FF", label: "Polyglot", icon: "✦" },
+  Fairy: { emoji: "✨", color: "#F472B6", light: "#FEF0F5", label: "No-Code", icon: "☆" },
+  Steel: { emoji: "⚙️", color: "#64748B", light: "#F1F5F9", label: "Mobile", icon: "⬡" },
+};
+
+const EVO = ["Rookie", "Trained", "Evolved", "Elite", "Legendary"];
+const EVO_ICON = ["🥚", "⭐", "🌟", "💫", "👑"];
+
+// Medellín-centered data
+const DEFAULT_CENTER = [6.2442, -75.5812];
+
+const CAFES_GYMS = [
+  { id: "pergamino", name: "Pergamino Café", type: "cafe", gymType: "Electric", level: 5, lat: 6.2103, lng: -75.5684, leader: "María V.", leaderEvo: 3, members: 14, specialty: "Frontend Fridays ☕", desc: "Best specialty coffee meets frontend devs" },
+  { id: "tostao-poblado", name: "Tostao Poblado", type: "cafe", gymType: "Fairy", level: 3, lat: 6.2088, lng: -75.5675, leader: "Luna P.", leaderEvo: 2, members: 8, specialty: "No-Code Mornings ☕", desc: "Affordable coffee, powerful automations" },
+  { id: "velvet", name: "Velvet Café", type: "cafe", gymType: "Water", level: 4, lat: 6.2095, lng: -75.5710, leader: "Diego ML", leaderEvo: 3, members: 11, specialty: "Data Brunch ☕", desc: "Quiet corner for data crunching" },
+  { id: "hija-mia", name: "Hija Mía Coffee", type: "cafe", gymType: "Psychic", level: 4, lat: 6.2115, lng: -75.5660, leader: "Haskell Phil", leaderEvo: 3, members: 7, specialty: "FP Sessions ☕", desc: "Functional programming over pour-overs" },
+  { id: "urbania", name: "Urbania Café", type: "cafe", gymType: "Grass", level: 3, lat: 6.2510, lng: -75.5750, leader: "K8s Master", leaderEvo: 2, members: 9, specialty: "DevOps Drip ☕", desc: "Infrastructure talk over espresso" },
+];
+
+const COWORK_GYMS = [
+  { id: "selina", name: "Selina Cowork", type: "cowork", gymType: "Dragon", level: 7, lat: 6.2078, lng: -75.5687, leader: "Carlos R.", leaderEvo: 4, members: 34, specialty: "Full-Stack Arena 💻", desc: "The main training ground. All types welcome." },
+  { id: "atomhouse", name: "Atom House", type: "cowork", gymType: "Electric", level: 6, lat: 6.2065, lng: -75.5698, leader: "React Rex", leaderEvo: 4, members: 28, specialty: "JS Dojo 💻", desc: "JavaScript intensive training facility" },
+  { id: "tink", name: "Tinkko", type: "cowork", gymType: "Rock", level: 5, lat: 6.2505, lng: -75.5695, leader: "Enterprise Ed", leaderEvo: 3, members: 19, specialty: "Enterprise League 💻", desc: "Serious business, serious code" },
+  { id: "coink", name: "CoInk Lab", type: "cowork", gymType: "Water", level: 5, lat: 6.1725, lng: -75.5730, leader: "Data Diego", leaderEvo: 3, members: 22, specialty: "AI Training Camp 💻", desc: "ML models and datasets" },
+  { id: "nodo", name: "Nodo Cowork", type: "cowork", gymType: "Grass", level: 4, lat: 6.2485, lng: -75.5710, leader: "Terraform Tom", leaderEvo: 3, members: 15, specialty: "Cloud Gym 💻", desc: "Infrastructure scaling training" },
+];
+
+const ALL_GYMS = [...CAFES_GYMS, ...COWORK_GYMS];
+
+const EVENTS = [
+  { id: "cursor", name: "Cursor AI Gathering", emoji: "⚡", rarity: "Legendary", date: "Feb 15", time: "6PM", lat: 6.2078, lng: -75.5687, color: "#EAB308", attendees: 45, max: 60, rewards: ["Cursor Badge", "+500 XP", "Legendary Encounter"], desc: "AI-powered coding. Rare Electric/Psychic spawns." },
+  { id: "claude", name: "Claude Code Hackathon", emoji: "🧠", rarity: "Mythical", date: "Feb 22", time: "10AM", lat: 6.2065, lng: -75.5698, color: "#EC4899", attendees: 28, max: 40, rewards: ["Anthropic Badge", "+1000 XP", "Mythical Encounter", "Evolution Stone"], desc: "12h hackathon. Mythical Psychic/Dragon spawns." },
+  { id: "oss", name: "Open Source Friday", emoji: "🌿", rarity: "Rare", date: "Every Fri", time: "4PM", lat: 6.2103, lng: -75.5684, color: "#22C55E", attendees: 12, max: 25, rewards: ["OSS Badge", "+200 XP"], desc: "Weekly OSS contributions together." },
+];
+
+const MOCK_DEVS = [
+  { id: 1, name: "sofia_ts", type: "Electric", secondary: "Fairy", evo: 2, lat: 6.2090, lng: -75.5680, stars: 234, repos: 45, status: "Building components", avatar: "👩‍💻", hp: 120, atk: 95, def: 70, spd: 130 },
+  { id: 2, name: "juanml", type: "Water", secondary: "Psychic", evo: 3, lat: 6.2075, lng: -75.5690, stars: 1200, repos: 67, status: "Training models", avatar: "🧔", hp: 150, atk: 85, def: 90, spd: 75 },
+  { id: 3, name: "rust_carlos", type: "Fire", secondary: null, evo: 4, lat: 6.2085, lng: -75.5675, stars: 3400, repos: 23, status: "Zero-cost abstractions", avatar: "🔥", hp: 130, atk: 180, def: 95, spd: 140 },
+  { id: 4, name: "luna_make", type: "Fairy", secondary: "Electric", evo: 2, lat: 6.2505, lng: -75.5700, stars: 89, repos: 12, status: "Automating everything", avatar: "✨", hp: 100, atk: 60, def: 80, spd: 110 },
+  { id: 5, name: "k8s_pipe", type: "Grass", secondary: "Steel", evo: 3, lat: 6.2490, lng: -75.5720, stars: 890, repos: 34, status: "Deploying clusters", avatar: "🌿", hp: 160, atk: 75, def: 140, spd: 60 },
+  { id: 6, name: "ghost_sec", type: "Ghost", secondary: null, evo: 3, lat: 6.2510, lng: -75.5760, stars: 560, repos: 18, status: "Pentesting", avatar: "👻", hp: 110, atk: 120, def: 65, spd: 150 },
+  { id: 7, name: "haskell_fp", type: "Psychic", secondary: null, evo: 2, lat: 6.2115, lng: -75.5660, stars: 340, repos: 28, status: "Category theory", avatar: "🧠", hp: 90, atk: 160, def: 55, spd: 85 },
+  { id: 8, name: "java_corp", type: "Rock", secondary: "Steel", evo: 3, lat: 6.2505, lng: -75.5695, stars: 120, repos: 56, status: "Enterprise patterns", avatar: "🪨", hp: 200, atk: 70, def: 180, spd: 40 },
+  { id: 9, name: "swift_marta", type: "Steel", secondary: "Electric", evo: 2, lat: 6.2070, lng: -75.5685, stars: 200, repos: 19, status: "Shipping iOS", avatar: "📱", hp: 115, atk: 90, def: 100, spd: 95 },
+  { id: 10, name: "poly_dragon", type: "Dragon", secondary: "Fire", evo: 4, lat: 6.2080, lng: -75.5700, stars: 5600, repos: 89, status: "OSS maintaining", avatar: "🐉", hp: 170, atk: 155, def: 110, spd: 120 },
+  { id: 11, name: "andres_felix", type: "Fairy", secondary: "Electric", evo: 3, lat: 6.2442, lng: -75.5812, stars: 156, repos: 22, status: "Scaling credit ops", avatar: "🚀", hp: 145, atk: 98, def: 72, spd: 130, isMe: true },
+];
+
+const MY_PROFILE = MOCK_DEVS.find(d => d.isMe);
+
+// ============================================================
+// LEAFLET MAP COMPONENT
+// ============================================================
+function LeafletMap({ userPos, onMarkerClick, activeFilter }) {
+  const mapRef = useRef(null);
+  const mapInstanceRef = useRef(null);
+  const markersRef = useRef([]);
+  const userMarkerRef = useRef(null);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    if (window.L) { setLoaded(true); return; }
+    const css = document.createElement("link");
+    css.rel = "stylesheet";
+    css.href = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css";
+    document.head.appendChild(css);
+    const js = document.createElement("script");
+    js.src = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js";
+    js.onload = () => setLoaded(true);
+    document.head.appendChild(js);
+  }, []);
+
+  useEffect(() => {
+    if (!loaded || !mapRef.current || mapInstanceRef.current) return;
+    const L = window.L;
+    const map = L.map(mapRef.current, {
+      center: userPos || DEFAULT_CENTER,
+      zoom: 15,
+      zoomControl: false,
+      attributionControl: false,
+    });
+    L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+      maxZoom: 19,
+    }).addTo(map);
+    L.control.zoom({ position: "topright" }).addTo(map);
+    mapInstanceRef.current = map;
+    return () => { map.remove(); mapInstanceRef.current = null; };
+  }, [loaded]);
+
+  useEffect(() => {
+    if (!mapInstanceRef.current || !loaded) return;
+    const L = window.L;
+    const map = mapInstanceRef.current;
+    markersRef.current.forEach(m => map.removeLayer(m));
+    markersRef.current = [];
+
+    const createIcon = (html, size = 36) => L.divIcon({
+      html, className: "", iconSize: [size, size], iconAnchor: [size / 2, size / 2],
+    });
+
+    // Café gyms
+    if (activeFilter === "all" || activeFilter === "cafes") {
+      CAFES_GYMS.forEach(g => {
+        const t = TYPES[g.gymType];
+        const m = L.marker([g.lat, g.lng], {
+          icon: createIcon(`<div style="width:36px;height:36px;border-radius:10px;background:${t.color};display:flex;align-items:center;justify-content:center;font-size:16px;box-shadow:0 2px 12px ${t.color}60;border:2px solid #fff;">☕</div>`, 36),
+        }).addTo(map);
+        m.on("click", () => onMarkerClick({ type: "gym", data: g }));
+        markersRef.current.push(m);
+      });
+    }
+
+    // Cowork gyms
+    if (activeFilter === "all" || activeFilter === "coworks") {
+      COWORK_GYMS.forEach(g => {
+        const t = TYPES[g.gymType];
+        const m = L.marker([g.lat, g.lng], {
+          icon: createIcon(`<div style="width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,${t.color},${t.color}cc);display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 4px 16px ${t.color}50;border:3px solid #fff;">💻</div>`, 40),
+        }).addTo(map);
+        m.on("click", () => onMarkerClick({ type: "gym", data: g }));
+        markersRef.current.push(m);
+      });
+    }
+
+    // Events
+    if (activeFilter === "all" || activeFilter === "events") {
+      EVENTS.forEach(ev => {
+        const m = L.marker([ev.lat, ev.lng], {
+          icon: createIcon(`<div style="width:44px;height:44px;border-radius:50%;background:${ev.color};display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:0 0 20px ${ev.color}80,0 0 40px ${ev.color}40;border:3px solid #fff;animation:epulse 2s infinite;">${ev.emoji}</div>`, 44),
+        }).addTo(map);
+        m.on("click", () => onMarkerClick({ type: "event", data: ev }));
+        markersRef.current.push(m);
+      });
+    }
+
+    // Devs
+    if (activeFilter === "all" || activeFilter === "devs") {
+      MOCK_DEVS.forEach(d => {
+        const t = TYPES[d.type];
+        const isMe = d.isMe;
+        const size = isMe ? 42 : 30;
+        const m = L.marker([d.lat, d.lng], {
+          icon: createIcon(
+            isMe
+              ? `<div style="width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,#F472B6,#EAB308);display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:0 0 20px #F472B680,0 0 40px #F472B640;border:3px solid #fff;">${d.avatar}</div>`
+              : `<div style="width:30px;height:30px;border-radius:50%;background:${t.color};display:flex;align-items:center;justify-content:center;font-size:14px;box-shadow:0 2px 8px ${t.color}60;border:2px solid #fff;">${d.avatar}</div>`,
+            size
+          ),
+          zIndexOffset: isMe ? 1000 : 0,
+        }).addTo(map);
+        if (!isMe) m.on("click", () => onMarkerClick({ type: "dev", data: d }));
+        markersRef.current.push(m);
+        if (isMe) userMarkerRef.current = m;
+      });
+    }
+  }, [loaded, activeFilter]);
+
+  // Update user position
+  useEffect(() => {
+    if (!mapInstanceRef.current || !userPos) return;
+    mapInstanceRef.current.setView(userPos, 15, { animate: true });
+  }, [userPos]);
+
+  return (
+    <>
+      <style>{`
+        @keyframes epulse { 0%,100% { box-shadow: 0 0 8px currentColor; } 50% { box-shadow: 0 0 28px currentColor; } }
+        .leaflet-container { background: #0d1117 !important; }
+        .leaflet-control-zoom a { background: #1a1f2e !important; color: #fff !important; border-color: #2a2f3e !important; }
+      `}</style>
+      <div ref={mapRef} style={{ width: "100%", height: "100%", borderRadius: 0 }} />
+    </>
+  );
+}
+
+// ============================================================
+// 3D CARD
+// ============================================================
+function Card3D({ children, color = "#3B82F6", style = {} }) {
+  const ref = useRef(null);
+  const [rot, setRot] = useState({ x: 0, y: 0 });
+  const [hovering, setHovering] = useState(false);
+
+  const handleMove = useCallback((clientX, clientY) => {
+    if (!ref.current) return;
+    const rect = ref.current.getBoundingClientRect();
+    const x = (clientY - rect.top - rect.height / 2) / 12;
+    const y = -(clientX - rect.left - rect.width / 2) / 12;
+    setRot({ x: Math.max(-15, Math.min(15, x)), y: Math.max(-15, Math.min(15, y)) });
+  }, []);
+
+  return (
+    <div ref={ref}
+      onMouseMove={e => { setHovering(true); handleMove(e.clientX, e.clientY); }}
+      onMouseLeave={() => { setHovering(false); setRot({ x: 0, y: 0 }); }}
+      onTouchMove={e => { const t = e.touches[0]; handleMove(t.clientX, t.clientY); }}
+      onTouchEnd={() => setRot({ x: 0, y: 0 })}
+      style={{
+        perspective: 800,
+        ...style,
+      }}
+    >
+      <div style={{
+        transform: `rotateX(${rot.x}deg) rotateY(${rot.y}deg)`,
+        transition: hovering ? "transform 0.1s ease-out" : "transform 0.5s ease-out",
+        transformStyle: "preserve-3d",
+        borderRadius: 20,
+        boxShadow: hovering
+          ? `0 20px 60px ${color}25, 0 8px 24px rgba(0,0,0,0.3)`
+          : `0 8px 30px ${color}15, 0 4px 12px rgba(0,0,0,0.2)`,
+      }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// TYPE BADGE
+// ============================================================
+function TypeBadge({ type, size = "sm" }) {
+  const t = TYPES[type];
+  if (!t) return null;
+  const lg = size === "lg";
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center", gap: lg ? 5 : 3,
+      padding: lg ? "5px 14px" : "3px 10px",
+      background: `${t.color}18`, border: `1.5px solid ${t.color}35`,
+      borderRadius: 20, fontSize: lg ? 12 : 10, fontWeight: 700, color: t.color,
+      fontFamily: "var(--mono)", whiteSpace: "nowrap", letterSpacing: 0.3,
+    }}>
+      {t.emoji} {type}
+    </span>
+  );
+}
+
+// ============================================================
+// STAT BAR (Pokemon style)
+// ============================================================
+function StatBar({ label, value, max = 255, compact }) {
+  const pct = Math.min((value / max) * 100, 100);
+  const color = pct > 65 ? "#22C55E" : pct > 35 ? "#EAB308" : "#EF4444";
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: compact ? 4 : 6, marginBottom: compact ? 3 : 5 }}>
+      <span style={{ width: compact ? 32 : 44, fontSize: compact ? 9 : 10, color: "#94A3B8", fontFamily: "var(--mono)", fontWeight: 600, textAlign: "right" }}>{label}</span>
+      <span style={{ width: compact ? 24 : 30, fontSize: compact ? 10 : 12, fontWeight: 800, color: "#E2E8F0", fontFamily: "var(--mono)", textAlign: "right" }}>{value}</span>
+      <div style={{ flex: 1, height: compact ? 4 : 6, background: "#1E293B", borderRadius: 4, overflow: "hidden" }}>
+        <div style={{ width: `${pct}%`, height: "100%", background: `linear-gradient(90deg, ${color}cc, ${color})`, borderRadius: 4, transition: "width 0.8s ease-out" }} />
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// BOTTOM SHEET
+// ============================================================
+function BottomSheet({ children, onClose, title, accent }) {
+  return (
+    <div onClick={onClose} style={{
+      position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)",
+      backdropFilter: "blur(8px)", zIndex: 200,
+      display: "flex", alignItems: "flex-end", justifyContent: "center",
+      animation: "fadeIn 0.2s",
+    }}>
+      <div onClick={e => e.stopPropagation()} style={{
+        width: "100%", maxWidth: 520, maxHeight: "80vh", overflowY: "auto",
+        background: "#0F172A", borderRadius: "24px 24px 0 0",
+        borderTop: `3px solid ${accent || "#3B82F6"}`,
+        animation: "sheetUp 0.3s ease-out",
+      }}>
+        <div style={{ padding: "16px 20px 0", position: "sticky", top: 0, background: "#0F172A", zIndex: 2 }}>
+          <div style={{ width: 40, height: 4, background: "#334155", borderRadius: 2, margin: "0 auto 12px" }} />
+          {title && <h3 style={{ margin: "0 0 12px", fontSize: 16, fontWeight: 800, color: "#F1F5F9", fontFamily: "var(--display)" }}>{title}</h3>}
+        </div>
+        <div style={{ padding: "0 20px 32px" }}>{children}</div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// GYM DETAIL
+// ============================================================
+function GymSheet({ gym, onClose }) {
+  const t = TYPES[gym.gymType];
+  const isCafe = gym.type === "cafe";
+  return (
+    <BottomSheet onClose={onClose} accent={t.color}>
+      <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 16 }}>
+        <div style={{
+          width: 56, height: 56, borderRadius: 16,
+          background: `linear-gradient(135deg, ${t.color}30, ${t.color}10)`,
+          border: `2px solid ${t.color}50`, display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 28, boxShadow: `0 4px 20px ${t.color}30`,
+        }}>
+          {isCafe ? "☕" : "💻"}
+        </div>
+        <div>
+          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "#F1F5F9", fontFamily: "var(--display)" }}>{gym.name}</h3>
+          <div style={{ display: "flex", gap: 6, marginTop: 4, alignItems: "center" }}>
+            <TypeBadge type={gym.gymType} />
+            <span style={{ fontSize: 10, color: "#64748B", fontFamily: "var(--mono)" }}>
+              {isCafe ? "☕ Café Gym" : "💻 Training Gym"} · Lv.{gym.level}
+            </span>
+          </div>
+        </div>
+      </div>
+      <p style={{ fontSize: 13, color: "#94A3B8", lineHeight: 1.6, margin: "0 0 16px" }}>{gym.desc}</p>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 20 }}>
+        {[
+          { label: "Members", val: gym.members },
+          { label: "Level", val: gym.level },
+          { label: "Specialty", val: gym.specialty.split(" ")[0] },
+        ].map((s, i) => (
+          <div key={i} style={{ padding: 12, background: "#1E293B", borderRadius: 12, textAlign: "center" }}>
+            <div style={{ fontSize: 18, fontWeight: 800, color: t.color, fontFamily: "var(--mono)" }}>{s.val}</div>
+            <div style={{ fontSize: 9, color: "#64748B", textTransform: "uppercase", letterSpacing: 1, marginTop: 2, fontFamily: "var(--mono)" }}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{ padding: 14, background: `${t.color}08`, borderRadius: 14, border: `1px solid ${t.color}20`, marginBottom: 16 }}>
+        <div style={{ fontSize: 9, color: "#64748B", textTransform: "uppercase", letterSpacing: 1.5, fontFamily: "var(--mono)", marginBottom: 8 }}>Gym Leader</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ width: 40, height: 40, borderRadius: 12, background: `${t.color}20`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, border: `1px solid ${t.color}30` }}>
+            {EVO_ICON[gym.leaderEvo]}
+          </div>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#E2E8F0", fontFamily: "var(--mono)" }}>{gym.leader}</div>
+            <div style={{ fontSize: 10, color: "#64748B", fontFamily: "var(--mono)" }}>{EVO_ICON[gym.leaderEvo]} {EVO[gym.leaderEvo]}</div>
+          </div>
+        </div>
+      </div>
+      <div style={{ display: "flex", gap: 10 }}>
+        <button style={{
+          flex: 1, padding: 14, borderRadius: 14, border: "none", fontFamily: "var(--mono)",
+          background: `linear-gradient(135deg, ${t.color}, ${t.color}cc)`,
+          color: "#fff", fontSize: 13, fontWeight: 800, cursor: "pointer",
+          boxShadow: `0 4px 16px ${t.color}40`,
+        }}>
+          ⚔️ Challenge
+        </button>
+        <button style={{
+          flex: 1, padding: 14, borderRadius: 14, border: `1.5px solid #334155`,
+          background: "#1E293B", color: "#94A3B8", fontSize: 13, fontWeight: 700,
+          fontFamily: "var(--mono)", cursor: "pointer",
+        }}>
+          📍 Directions
+        </button>
+      </div>
+    </BottomSheet>
+  );
+}
+
+// ============================================================
+// DEV DETAIL (3D card)
+// ============================================================
+function DevSheet({ dev, onClose }) {
+  const t = TYPES[dev.type];
+  const total = dev.hp + dev.atk + dev.def + dev.spd;
+  return (
+    <BottomSheet onClose={onClose} accent={t.color}>
+      <Card3D color={t.color}>
+        <div style={{
+          background: `linear-gradient(160deg, #0F172A, ${t.color}12)`,
+          borderRadius: 20, padding: 20, border: `1px solid ${t.color}25`,
+          position: "relative", overflow: "hidden",
+        }}>
+          {/* Pokeball watermark */}
+          <div style={{
+            position: "absolute", top: -30, right: -30, width: 120, height: 120,
+            borderRadius: "50%", border: `2px solid ${t.color}10`,
+            opacity: 0.15,
+          }}>
+            <div style={{ position: "absolute", top: "50%", left: 0, right: 0, height: 2, background: t.color }} />
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{
+                width: 56, height: 56, borderRadius: 16, background: `${t.color}18`,
+                border: `2px solid ${t.color}40`, display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 28, boxShadow: `0 0 20px ${t.color}30`,
+              }}>{dev.avatar}</div>
+              <div>
+                <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "#F1F5F9", fontFamily: "var(--display)" }}>{dev.name}</h3>
+                <div style={{ display: "flex", gap: 4, marginTop: 4 }}>
+                  <TypeBadge type={dev.type} />
+                  {dev.secondary && <TypeBadge type={dev.secondary} />}
+                </div>
+              </div>
+            </div>
+            <span style={{ fontSize: 10, color: "#475569", fontFamily: "var(--mono)" }}>
+              {EVO_ICON[dev.evo]} {EVO[dev.evo]}
+            </span>
+          </div>
+          <div style={{
+            padding: "8px 12px", background: "#1E293B50", borderRadius: 10, marginBottom: 14,
+            borderLeft: `3px solid ${t.color}40`,
+          }}>
+            <span style={{ fontSize: 11, color: "#94A3B8", fontFamily: "var(--mono)", fontStyle: "italic" }}>"{dev.status}"</span>
+          </div>
+          <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
+            {[{ l: "Stars", v: dev.stars }, { l: "Repos", v: dev.repos }, { l: "Total", v: total }].map((s, i) => (
+              <div key={i} style={{ flex: 1, textAlign: "center", padding: "8px 0", background: "#1E293B40", borderRadius: 8 }}>
+                <div style={{ fontSize: 16, fontWeight: 800, color: t.color, fontFamily: "var(--mono)" }}>{s.v >= 1000 ? `${(s.v/1000).toFixed(1)}k` : s.v}</div>
+                <div style={{ fontSize: 8, color: "#64748B", textTransform: "uppercase", letterSpacing: 1, fontFamily: "var(--mono)" }}>{s.l}</div>
+              </div>
+            ))}
+          </div>
+          <StatBar label="HP" value={dev.hp} compact />
+          <StatBar label="ATK" value={dev.atk} compact />
+          <StatBar label="DEF" value={dev.def} compact />
+          <StatBar label="SPD" value={dev.spd} compact />
+        </div>
+      </Card3D>
+      <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+        <button style={{
+          flex: 1, padding: 14, borderRadius: 14, border: "none", fontFamily: "var(--mono)",
+          background: `linear-gradient(135deg, ${t.color}, ${t.color}cc)`,
+          color: "#fff", fontSize: 13, fontWeight: 800, cursor: "pointer",
+        }}>🤝 Add Friend</button>
+        <button style={{
+          flex: 1, padding: 14, borderRadius: 14, border: `1.5px solid #334155`,
+          background: "#1E293B", color: "#94A3B8", fontSize: 13, fontWeight: 700,
+          fontFamily: "var(--mono)", cursor: "pointer",
+        }}>⚔️ Battle</button>
+      </div>
+    </BottomSheet>
+  );
+}
+
+// ============================================================
+// EVENT DETAIL
+// ============================================================
+function EventSheet({ event, onClose }) {
+  const pct = (event.attendees / event.max) * 100;
+  const rarityColor = { Rare: "#22C55E", Legendary: "#EAB308", Mythical: "#EC4899" };
+  return (
+    <BottomSheet onClose={onClose} accent={event.color}>
+      <div style={{ textAlign: "center", marginBottom: 16 }}>
+        <div style={{
+          width: 72, height: 72, borderRadius: "50%", margin: "0 auto 12px",
+          background: `${event.color}20`, border: `3px solid ${event.color}`,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 36, boxShadow: `0 0 30px ${event.color}40`,
+        }}>{event.emoji}</div>
+        <h3 style={{ margin: 0, fontSize: 20, fontWeight: 900, color: "#F1F5F9", fontFamily: "var(--display)" }}>{event.name}</h3>
+        <div style={{ marginTop: 6 }}>
+          <span style={{
+            padding: "3px 12px", borderRadius: 4, fontSize: 10, fontWeight: 800,
+            textTransform: "uppercase", letterSpacing: 2,
+            color: rarityColor[event.rarity], background: `${rarityColor[event.rarity]}15`,
+            border: `1px solid ${rarityColor[event.rarity]}30`, fontFamily: "var(--mono)",
+          }}>{event.rarity}</span>
+        </div>
+      </div>
+      <p style={{ fontSize: 13, color: "#94A3B8", lineHeight: 1.6, margin: "0 0 16px", textAlign: "center" }}>{event.desc}</p>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 16 }}>
+        {[{ l: "Date", v: event.date }, { l: "Time", v: event.time }].map((s, i) => (
+          <div key={i} style={{ padding: 12, background: "#1E293B", borderRadius: 12, textAlign: "center" }}>
+            <div style={{ fontSize: 8, color: "#64748B", textTransform: "uppercase", letterSpacing: 1, fontFamily: "var(--mono)", marginBottom: 4 }}>{s.l}</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#E2E8F0", fontFamily: "var(--mono)" }}>{s.v}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+          <span style={{ fontSize: 11, color: "#64748B", fontFamily: "var(--mono)" }}>{event.attendees}/{event.max} trainers</span>
+          <span style={{ fontSize: 11, color: event.color, fontFamily: "var(--mono)", fontWeight: 700 }}>{Math.floor(pct)}%</span>
+        </div>
+        <div style={{ height: 8, background: "#1E293B", borderRadius: 4, overflow: "hidden" }}>
+          <div style={{ width: `${pct}%`, height: "100%", background: `linear-gradient(90deg, ${event.color}cc, ${event.color})`, borderRadius: 4, transition: "width 1s" }} />
+        </div>
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 20 }}>
+        {event.rewards.map((r, i) => (
+          <span key={i} style={{
+            padding: "5px 12px", background: `${event.color}10`, border: `1px solid ${event.color}20`,
+            borderRadius: 8, fontSize: 11, color: event.color, fontFamily: "var(--mono)", fontWeight: 600,
+          }}>{r}</span>
+        ))}
+      </div>
+      <button style={{
+        width: "100%", padding: 16, borderRadius: 16, border: "none",
+        background: `linear-gradient(135deg, ${event.color}, ${event.color}cc)`,
+        color: "#fff", fontSize: 15, fontWeight: 900, cursor: "pointer",
+        fontFamily: "var(--display)", boxShadow: `0 6px 24px ${event.color}40`,
+        letterSpacing: 0.5,
+      }}>🎟️ Join Event</button>
+    </BottomSheet>
+  );
+}
+
+// ============================================================
+// POKÉDEX (Classic device look)
+// ============================================================
+function PokedexView({ onSelectDev }) {
+  const [filter, setFilter] = useState("all");
+  const [selected, setSelected] = useState(null);
+  const filtered = filter === "all" ? MOCK_DEVS : MOCK_DEVS.filter(d => d.type === filter);
+
+  return (
+    <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+      {/* Pokédex header - red device top */}
+      <div style={{
+        background: "linear-gradient(135deg, #DC2626, #B91C1C)",
+        padding: "16px 16px 12px",
+        borderBottom: "4px solid #991B1B",
+        position: "relative",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+          <div style={{ width: 20, height: 20, borderRadius: "50%", background: "#3B82F6", border: "2px solid #60A5FA", boxShadow: "0 0 12px #3B82F680, inset 0 -2px 4px rgba(0,0,0,0.3)" }} />
+          <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#EF4444", boxShadow: "inset 0 -1px 2px rgba(0,0,0,0.3)" }} />
+          <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#EAB308", boxShadow: "inset 0 -1px 2px rgba(0,0,0,0.3)" }} />
+          <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#22C55E", boxShadow: "inset 0 -1px 2px rgba(0,0,0,0.3)" }} />
+        </div>
+        <h2 style={{ margin: 0, fontSize: 20, fontWeight: 900, color: "#FEE2E2", fontFamily: "var(--display)", letterSpacing: -0.5 }}>Pokédex</h2>
+        <p style={{ margin: "2px 0 0", fontSize: 11, color: "#FCA5A5", fontFamily: "var(--mono)" }}>
+          {MOCK_DEVS.length} trainers discovered
+        </p>
+      </div>
+
+      {/* Type filter */}
+      <div style={{ padding: "10px 12px", background: "#0F172A", borderBottom: "1px solid #1E293B", overflowX: "auto", display: "flex", gap: 4 }}>
+        <FilterPill label="All" active={filter === "all"} onClick={() => setFilter("all")} color="#94A3B8" />
+        {Object.entries(TYPES).map(([k, v]) => (
+          <FilterPill key={k} label={`${v.emoji}`} active={filter === k} onClick={() => setFilter(k)} color={v.color} />
+        ))}
+      </div>
+
+      {/* Grid - Pokédex screen */}
+      <div style={{
+        flex: 1, overflowY: "auto", padding: 12,
+        background: "#0F172A",
+      }}>
+        {selected ? (
+          <div style={{ animation: "fadeIn 0.3s" }}>
+            <button onClick={() => setSelected(null)} style={{
+              background: "none", border: "none", color: "#64748B", fontSize: 12,
+              fontFamily: "var(--mono)", cursor: "pointer", marginBottom: 12, padding: 0,
+            }}>← Back to list</button>
+            <PokedexEntry dev={selected} />
+          </div>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
+            {filtered.map(d => {
+              const t = TYPES[d.type];
+              return (
+                <div key={d.id} onClick={() => setSelected(d)} style={{
+                  padding: 12, background: "#1E293B",
+                  borderRadius: 14, cursor: "pointer",
+                  border: `1.5px solid ${t.color}20`,
+                  transition: "all 0.2s", textAlign: "center",
+                  position: "relative",
+                }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = `${t.color}60`; e.currentTarget.style.transform = "translateY(-2px)"; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = `${t.color}20`; e.currentTarget.style.transform = "none"; }}
+                >
+                  <div style={{
+                    width: 48, height: 48, borderRadius: 14, margin: "0 auto 8px",
+                    background: `linear-gradient(135deg, ${t.color}20, ${t.color}08)`,
+                    border: `1px solid ${t.color}30`, display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 24,
+                  }}>{d.avatar}</div>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: "#E2E8F0", fontFamily: "var(--mono)", marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.name}</div>
+                  <div style={{ display: "flex", justifyContent: "center", gap: 2 }}>
+                    <span style={{ fontSize: 8, color: t.color, fontFamily: "var(--mono)" }}>{t.emoji} {d.type}</span>
+                  </div>
+                  <div style={{ position: "absolute", top: 6, right: 6, fontSize: 8, color: "#475569", fontFamily: "var(--mono)" }}>
+                    #{String(d.id).padStart(3, "0")}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PokedexEntry({ dev }) {
+  const t = TYPES[dev.type];
+  const total = dev.hp + dev.atk + dev.def + dev.spd;
+  return (
+    <Card3D color={t.color} style={{ marginBottom: 16 }}>
+      <div style={{
+        background: `linear-gradient(160deg, #1E293B, ${t.color}08)`,
+        borderRadius: 20, overflow: "hidden", border: `1px solid ${t.color}20`,
+      }}>
+        {/* Top colored banner */}
+        <div style={{
+          background: `linear-gradient(135deg, ${t.color}40, ${t.color}15)`,
+          padding: "20px 20px 30px", textAlign: "center", position: "relative",
+        }}>
+          <div style={{ position: "absolute", top: 12, left: 16, fontSize: 10, color: `${t.color}80`, fontFamily: "var(--mono)" }}>
+            #{String(dev.id).padStart(3, "0")}
+          </div>
+          <div style={{ position: "absolute", top: 12, right: 16 }}>
+            <span style={{ fontSize: 10, color: `${t.color}`, fontFamily: "var(--mono)", fontWeight: 700 }}>
+              {EVO_ICON[dev.evo]} {EVO[dev.evo]}
+            </span>
+          </div>
+          <div style={{
+            width: 80, height: 80, borderRadius: 20, margin: "0 auto",
+            background: `radial-gradient(circle, ${t.color}30, transparent)`,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 48,
+          }}>{dev.avatar}</div>
+        </div>
+
+        <div style={{ padding: "16px 20px 20px", marginTop: -16, background: "#1E293B", borderRadius: "16px 16px 0 0", position: "relative" }}>
+          <h3 style={{ margin: "0 0 4px", fontSize: 22, fontWeight: 900, color: "#F1F5F9", fontFamily: "var(--display)", textAlign: "center" }}>{dev.name}</h3>
+          <div style={{ display: "flex", justifyContent: "center", gap: 6, marginBottom: 12 }}>
+            <TypeBadge type={dev.type} size="lg" />
+            {dev.secondary && <TypeBadge type={dev.secondary} size="lg" />}
+          </div>
+          <div style={{ padding: "8px 14px", background: "#0F172A", borderRadius: 10, marginBottom: 14, textAlign: "center" }}>
+            <span style={{ fontSize: 12, color: "#94A3B8", fontFamily: "var(--mono)", fontStyle: "italic" }}>"{dev.status}"</span>
+          </div>
+          <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+            {[{ l: "Stars", v: dev.stars, e: "⭐" }, { l: "Repos", v: dev.repos, e: "📦" }, { l: "BST", v: total, e: "📊" }].map((s, i) => (
+              <div key={i} style={{ flex: 1, padding: 10, background: "#0F172A", borderRadius: 10, textAlign: "center" }}>
+                <div style={{ fontSize: 9, marginBottom: 2 }}>{s.e}</div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: "#E2E8F0", fontFamily: "var(--mono)" }}>{s.v >= 1000 ? `${(s.v/1000).toFixed(1)}k` : s.v}</div>
+                <div style={{ fontSize: 8, color: "#64748B", fontFamily: "var(--mono)", textTransform: "uppercase", letterSpacing: 1 }}>{s.l}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ fontSize: 9, color: "#475569", textTransform: "uppercase", letterSpacing: 2, fontFamily: "var(--mono)", marginBottom: 8 }}>Base Stats</div>
+          <StatBar label="HP" value={dev.hp} />
+          <StatBar label="ATK" value={dev.atk} />
+          <StatBar label="DEF" value={dev.def} />
+          <StatBar label="SPD" value={dev.spd} />
+          <div style={{ textAlign: "right", fontSize: 10, color: "#475569", fontFamily: "var(--mono)", marginTop: 4 }}>
+            Total: <strong style={{ color: "#94A3B8" }}>{total}</strong>
+          </div>
+        </div>
+      </div>
+    </Card3D>
+  );
+}
+
+function FilterPill({ label, active, onClick, color }) {
+  return (
+    <button onClick={onClick} style={{
+      padding: "5px 12px", borderRadius: 20, fontSize: 12, border: "none",
+      fontFamily: "var(--mono)", fontWeight: active ? 800 : 500, cursor: "pointer",
+      background: active ? `${color}20` : "#1E293B",
+      color: active ? color : "#475569",
+      transition: "all 0.2s", whiteSpace: "nowrap", flexShrink: 0,
+    }}>{label}</button>
+  );
+}
+
+// ============================================================
+// PROFILE VIEW
+// ============================================================
+function ProfileView() {
+  const p = MY_PROFILE;
+  const t = TYPES[p.type];
+  return (
+    <div style={{ padding: 16, overflowY: "auto", height: "100%" }}>
+      <Card3D color={t.color} style={{ marginBottom: 16 }}>
+        <div style={{
+          background: `linear-gradient(160deg, #1E293B, ${t.color}12)`,
+          borderRadius: 20, padding: 24, border: `1px solid ${t.color}20`,
+          position: "relative", overflow: "hidden",
+        }}>
+          <div style={{
+            position: "absolute", top: -40, right: -40, width: 160, height: 160,
+            borderRadius: "50%", border: `3px solid ${t.color}08`, opacity: 0.4,
+          }}>
+            <div style={{ position: "absolute", top: "50%", left: 0, right: 0, height: 3, background: `${t.color}15` }} />
+            <div style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: 20, height: 20, borderRadius: "50%", border: `2px solid ${t.color}15` }} />
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 20 }}>
+            <div style={{
+              width: 72, height: 72, borderRadius: 20,
+              background: `linear-gradient(135deg, ${t.color}30, ${t.color}10)`,
+              border: `3px solid ${t.color}50`, display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 36, boxShadow: `0 8px 24px ${t.color}30`,
+            }}>{p.avatar}</div>
+            <div>
+              <h2 style={{ margin: 0, fontSize: 22, fontWeight: 900, color: "#F1F5F9", fontFamily: "var(--display)" }}>{p.name}</h2>
+              <div style={{ display: "flex", gap: 4, marginTop: 4 }}>
+                <TypeBadge type={p.type} size="lg" />
+                {p.secondary && <TypeBadge type={p.secondary} size="lg" />}
+              </div>
+              <div style={{ fontSize: 10, color: "#64748B", fontFamily: "var(--mono)", marginTop: 4 }}>
+                {EVO_ICON[p.evo]} {EVO[p.evo]} · ⭐ {p.stars} stars · 📦 {p.repos} repos
+              </div>
+            </div>
+          </div>
+          <StatBar label="HP" value={p.hp} />
+          <StatBar label="ATK" value={p.atk} />
+          <StatBar label="DEF" value={p.def} />
+          <StatBar label="SPD" value={p.spd} />
+        </div>
+      </Card3D>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 16 }}>
+        {[
+          { icon: "🎴", label: "Caught", value: "23" },
+          { icon: "🤝", label: "Friends", value: "8" },
+          { icon: "🏅", label: "Badges", value: "3" },
+        ].map((s, i) => (
+          <div key={i} style={{ padding: 14, background: "#1E293B", borderRadius: 14, textAlign: "center", border: "1px solid #334155" }}>
+            <div style={{ fontSize: 22, marginBottom: 4 }}>{s.icon}</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: "#E2E8F0", fontFamily: "var(--mono)" }}>{s.value}</div>
+            <div style={{ fontSize: 9, color: "#64748B", textTransform: "uppercase", letterSpacing: 1, fontFamily: "var(--mono)" }}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ background: "#1E293B", borderRadius: 14, padding: 16, border: "1px solid #334155", marginBottom: 16 }}>
+        <div style={{ fontSize: 9, color: "#475569", textTransform: "uppercase", letterSpacing: 2, fontFamily: "var(--mono)", marginBottom: 10 }}>Signature Moves</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+          {["Airtable Sync", "n8n Workflow", "Retool Deploy", "Make Automation"].map((m, i) => (
+            <div key={i} style={{
+              padding: "10px 12px", background: `${t.color}08`, borderRadius: 10,
+              border: `1px solid ${t.color}15`, fontSize: 11, fontWeight: 600,
+              color: "#CBD5E1", fontFamily: "var(--mono)",
+            }}>{m}</div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ background: "#1E293B", borderRadius: 14, padding: 16, border: "1px solid #334155" }}>
+        <div style={{ fontSize: 9, color: "#475569", textTransform: "uppercase", letterSpacing: 2, fontFamily: "var(--mono)", marginBottom: 10 }}>Gym Badges</div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {["⚡ Frontend", "✨ No-Code", "🧠 AI Tools"].map((b, i) => (
+            <span key={i} style={{
+              padding: "8px 14px", background: "#0F172A", borderRadius: 10,
+              border: "1px solid #334155", fontSize: 12, color: "#CBD5E1", fontFamily: "var(--mono)",
+            }}>{b}</span>
+          ))}
+          {[...Array(5)].map((_, i) => (
+            <span key={`e${i}`} style={{
+              padding: "8px 14px", background: "#0F172A50", borderRadius: 10,
+              border: "1px dashed #1E293B", fontSize: 12, color: "#1E293B", fontFamily: "var(--mono)",
+            }}>???</span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// EVENTS LIST
+// ============================================================
+function EventsView({ onSelect }) {
+  return (
+    <div style={{ padding: 16, overflowY: "auto", height: "100%" }}>
+      <h2 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 900, color: "#F1F5F9", fontFamily: "var(--display)" }}>Events</h2>
+      <p style={{ margin: "0 0 16px", fontSize: 11, color: "#64748B", fontFamily: "var(--mono)" }}>{EVENTS.length} active in your area</p>
+      {EVENTS.map(ev => {
+        const rarityColor = { Rare: "#22C55E", Legendary: "#EAB308", Mythical: "#EC4899" };
+        return (
+          <div key={ev.id} onClick={() => onSelect(ev)} style={{
+            padding: 16, background: "#1E293B", borderRadius: 16,
+            border: `1px solid ${ev.color}20`, marginBottom: 10, cursor: "pointer",
+            transition: "all 0.2s",
+          }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = `${ev.color}50`; e.currentTarget.style.transform = "translateY(-1px)"; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = `${ev.color}20`; e.currentTarget.style.transform = "none"; }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
+              <div style={{
+                width: 48, height: 48, borderRadius: "50%", background: `${ev.color}20`,
+                border: `2px solid ${ev.color}`, display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 22, boxShadow: `0 0 16px ${ev.color}30`, flexShrink: 0,
+              }}>{ev.emoji}</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 14, fontWeight: 800, color: "#F1F5F9", fontFamily: "var(--display)" }}>{ev.name}</div>
+                <div style={{ fontSize: 10, color: "#64748B", fontFamily: "var(--mono)", marginTop: 2 }}>{ev.date} · {ev.time}</div>
+              </div>
+              <span style={{
+                padding: "2px 8px", borderRadius: 4, fontSize: 8, fontWeight: 800,
+                textTransform: "uppercase", letterSpacing: 1.5,
+                color: rarityColor[ev.rarity], background: `${rarityColor[ev.rarity]}15`,
+                border: `1px solid ${rarityColor[ev.rarity]}30`, fontFamily: "var(--mono)",
+              }}>{ev.rarity}</span>
+            </div>
+            <p style={{ margin: "0 0 10px", fontSize: 11, color: "#94A3B8", lineHeight: 1.5 }}>{ev.desc}</p>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ display: "flex", gap: 4 }}>
+                {ev.rewards.slice(0, 2).map((r, i) => (
+                  <span key={i} style={{ padding: "2px 8px", background: `${ev.color}10`, borderRadius: 4, fontSize: 9, color: ev.color, fontFamily: "var(--mono)" }}>{r}</span>
+                ))}
+              </div>
+              <span style={{ fontSize: 10, color: "#64748B", fontFamily: "var(--mono)" }}>{ev.attendees}/{ev.max}</span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ============================================================
+// MAIN APP
+// ============================================================
+export default function DevDexGO() {
+  const [tab, setTab] = useState("map");
+  const [mapFilter, setMapFilter] = useState("all");
+  const [detail, setDetail] = useState(null);
+  const [userPos, setUserPos] = useState(null);
+  const [locating, setLocating] = useState(false);
+
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      pos => { setUserPos([pos.coords.latitude, pos.coords.longitude]); setLocating(false); },
+      () => { setUserPos(DEFAULT_CENTER); setLocating(false); },
+      { enableHighAccuracy: true, timeout: 8000 }
+    );
+  }, []);
+
+  const tabs = [
+    { id: "map", icon: "🗺️", label: "Map" },
+    { id: "pokedex", icon: "📱", label: "Pokédex" },
+    { id: "events", icon: "⚡", label: "Events" },
+    { id: "profile", icon: "🚀", label: "Me" },
+  ];
+
+  return (
+    <div style={{
+      height: "100vh", width: "100%", maxWidth: 520, margin: "0 auto",
+      background: "#0F172A", fontFamily: "var(--body)", color: "#F1F5F9",
+      display: "flex", flexDirection: "column", position: "relative", overflow: "hidden",
+    }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Nunito:wght@400;600;700;800;900&display=swap');
+        :root {
+          --mono: 'DM Mono', monospace;
+          --display: 'Nunito', sans-serif;
+          --body: 'Nunito', sans-serif;
+        }
+        * { box-sizing: border-box; margin: 0; }
+        body { margin: 0; background: #0F172A; overflow: hidden; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes sheetUp { from { transform: translateY(60px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes locPulse { 0%,100% { transform: translate(-50%,-50%) scale(1); opacity: 0.6; } 50% { transform: translate(-50%,-50%) scale(2); opacity: 0; } }
+        ::-webkit-scrollbar { width: 3px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
+      `}</style>
+
+      {/* Header bar */}
+      <div style={{
+        padding: "10px 16px", display: "flex", justifyContent: "space-between", alignItems: "center",
+        background: "#0F172A", borderBottom: "1px solid #1E293B", zIndex: 10, flexShrink: 0,
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ fontSize: 20 }}>🎮</span>
+          <span style={{
+            fontSize: 18, fontWeight: 900, fontFamily: "var(--display)",
+            background: "linear-gradient(135deg, #EAB308, #F97316)",
+            WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
+          }}>DevDex</span>
+          <span style={{ fontSize: 9, color: "#475569", fontFamily: "var(--mono)", fontWeight: 800, marginTop: 4, letterSpacing: 1 }}>GO</span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {locating && <span style={{ fontSize: 10, color: "#3B82F6", fontFamily: "var(--mono)" }}>📡 Locating...</span>}
+          {!locating && userPos && <span style={{ fontSize: 10, color: "#475569", fontFamily: "var(--mono)" }}>📍 Live</span>}
+        </div>
+      </div>
+
+      {/* Map filter chips */}
+      {tab === "map" && (
+        <div style={{
+          padding: "8px 12px", display: "flex", gap: 6, background: "#0F172A",
+          borderBottom: "1px solid #1E293B", zIndex: 10, flexShrink: 0,
+          overflowX: "auto",
+        }}>
+          {[
+            { id: "all", icon: "🌐", label: "All" },
+            { id: "cafes", icon: "☕", label: "Café Gyms" },
+            { id: "coworks", icon: "💻", label: "Training Gyms" },
+            { id: "devs", icon: "👤", label: "Trainers" },
+            { id: "events", icon: "⚡", label: "Events" },
+          ].map(f => (
+            <button key={f.id} onClick={() => setMapFilter(f.id)} style={{
+              padding: "6px 14px", borderRadius: 20, fontSize: 11, border: "none",
+              fontFamily: "var(--mono)", fontWeight: mapFilter === f.id ? 800 : 500,
+              background: mapFilter === f.id ? "#3B82F620" : "#1E293B",
+              color: mapFilter === f.id ? "#60A5FA" : "#64748B",
+              cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
+              display: "flex", alignItems: "center", gap: 4,
+              transition: "all 0.2s",
+            }}>
+              {f.icon} {f.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Main content */}
+      <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
+        {tab === "map" && (
+          <LeafletMap
+            userPos={userPos}
+            activeFilter={mapFilter}
+            onMarkerClick={d => setDetail(d)}
+          />
+        )}
+        {tab === "pokedex" && <PokedexView onSelectDev={d => setDetail({ type: "dev", data: d })} />}
+        {tab === "events" && <EventsView onSelect={ev => setDetail({ type: "event", data: ev })} />}
+        {tab === "profile" && <ProfileView />}
+      </div>
+
+      {/* Bottom nav */}
+      <div style={{
+        flexShrink: 0, background: "#0F172A",
+        borderTop: "1px solid #1E293B", padding: "4px 8px 8px",
+        display: "flex", zIndex: 10,
+      }}>
+        {tabs.map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)} style={{
+            flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 1,
+            padding: "8px 0 4px", border: "none", borderRadius: 12,
+            background: tab === t.id ? "#1E293B" : "transparent",
+            cursor: "pointer", transition: "all 0.2s",
+          }}>
+            <span style={{
+              fontSize: 20,
+              filter: tab === t.id ? "none" : "grayscale(1)",
+              opacity: tab === t.id ? 1 : 0.4,
+              transition: "all 0.2s",
+            }}>{t.icon}</span>
+            <span style={{
+              fontSize: 9, fontFamily: "var(--mono)", fontWeight: tab === t.id ? 800 : 500,
+              color: tab === t.id ? "#60A5FA" : "#475569", letterSpacing: 0.5,
+            }}>{t.label}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Detail sheets */}
+      {detail?.type === "gym" && <GymSheet gym={detail.data} onClose={() => setDetail(null)} />}
+      {detail?.type === "dev" && <DevSheet dev={detail.data} onClose={() => setDetail(null)} />}
+      {detail?.type === "event" && <EventSheet event={detail.data} onClose={() => setDetail(null)} />}
+    </div>
+  );
+}
